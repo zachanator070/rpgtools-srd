@@ -1,11 +1,11 @@
 # rpgtools-srd
 
-This repo contains the Dungeons and Dragons SRD that can be imported into rpgtools.
+This repo contains the Dungeons and Dragons SRD that can be imported into [RPG Tools](https://github.com/zachanator070/rpgtools).
 
 ## Usage
 
-1) Download a zip from the release section in this repo
-2) Open RPG tools and navigate to the Wiki section in a world you have access to
+1) Download a zip from the [release](https://github.com/zachanator070/rpgtools-srd/releases) section in this repo
+2) Open RPG Tools and navigate to the Wiki section in a world you have access to
 3) Right click a destination folder and select the 'Import' option
 4) Select the zip that downloaded in step 1 and click the 'Import' button
 
@@ -25,7 +25,7 @@ How was this data created?
 5) check the .png images created in the workspace directory to find models that were rerendered incorrectly
 6) delete .png and .glb files to rerender
 7) return to step 3 as needed
-8) make sure rpgtools is running locally with the srd wiki pages already imported
+8) make sure [RPG Tools](https://github.com/zachanator070/rpgtools) is running locally with the srd wiki pages already imported
 9) run upload.py
 10) right click on 5e folder and click export
 
