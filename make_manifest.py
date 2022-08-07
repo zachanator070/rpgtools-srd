@@ -5,13 +5,32 @@ import re
 import json
 from os import path
 import csv
-import env
+import os
 
 ALL_THINGS_FILENAME = 'all_mz4250_things.json'
-THINGIVESE_TOKEN = env['THINGIVESE_TOKEN']
+THINGIVERSE_TOKEN = os.environ.get('THINGIVERSE_TOKEN')
 
-def api_get(url):
-    response = requests.get(url, headers={"Authorization": f"token {THINGIVESE_TOKEN}"})
+
+def get_thing_page(url: str):
+    print(f'getting page of things {url}')
+    response = requests.get(url, headers={"Authorization": f"token {THINGIVERSE_TOKEN}"})
+    for result in response.json():
+        yield result
+    link_headers = response.headers['link'].split(',')
+    next_link = None
+    for header in link_headers:
+        if 'rel="next"' in header:
+            match = re.search('<(.*)>', header)
+            if match:
+                next_link = match.group(1)
+            break
+    if next_link:
+        yield from get_thing_page(next_link)
+
+
+def get_thing(url: str):
+    print(f'getting thing {url}')
+    response = requests.get(url, headers={"Authorization": f"token {THINGIVERSE_TOKEN}"})
     return response.json()
 
 
@@ -19,45 +38,33 @@ def fetch_all_things():
     if path.exists(ALL_THINGS_FILENAME):
         with open(ALL_THINGS_FILENAME, 'r') as all_things:
             return json.loads(all_things.read())
-    next_link = 'https://api.thingiverse.com/users/mz4250/things'
-    things = []
-    while next_link:
-        print(f'fetching {next_link}')
-        page_results = api_get(next_link)
-        new_things = []
-        for result in page_results:
-            thing = api_get(result['url'])
-            files = api_get(thing['files_url'])
-            thing['files'] = files
-            new_things.append(thing)
+    url = 'https://api.thingiverse.com/users/mz4250/things'
+    things = [get_thing(thing['url']) for thing in get_thing_page(url)]
+    for thing in things:
+        thing['files'] = fetch_thing_files(thing)
 
-        things.extend(new_things)
-        link_headers = response.headers['link'].split(',')
-        link_header = None
-        for header in link_headers:
-            if 'rel="next"' in header:
-                match = re.search('<(.*)>', header)
-                link_header = header
-                if match:
-                    next_link = match.group(1)
-                break
-        if not link_header:
-            next_link = None
     with open(ALL_THINGS_FILENAME, 'w') as all_things:
         all_things.write(json.dumps(things))
-    return all_things
+    return things
+
+
+def fetch_thing_files(thing: dict) -> dict:
+    print(f'fetching files for thing {thing["files_url"]}')
+    response = requests.get(thing['files_url'], headers={"Authorization": f"token {THINGIVERSE_TOKEN}"})
+    return response.json()
 
 
 REQUESTED_MODELS_FILENAME = 'requested_models.txt'
 
 
-def filter_stl_files(thing):
-    return list(filter(lambda thing_file: '.stl' in thing_file['name'], thing['files']))
+def filter_stl_files(thing_files):
+    return list(filter(lambda thing_file: '.stl' in thing_file['name'], thing_files))
 
 
 def match_model_to_thing(requested_models: list, all_things: list, animals: dict, current_things: list):
     matched_things = []
-    animal_files = list(filter(lambda file: '.stl' in file['name'], animals['files']))
+    animal_files = fetch_thing_files(animals)
+    animal_files = list(filter(lambda file: '.stl' in file['name'], animal_files))
     animal_names = list(map(lambda thing: thing['name'].replace('.stl', '').replace('_', ' '), animal_files))
 
     for requested_model in requested_models:
@@ -82,7 +89,8 @@ def match_model_to_thing(requested_models: list, all_things: list, animals: dict
                 if this_thing_score > thing_to_use_score:
                     thing_to_use_score = this_thing_score
                     thing_to_use = thing
-                for file in filter_stl_files(thing):
+                thing_files = thing['files']
+                for file in filter_stl_files(thing_files):
                     file_score = get_name_score(file['name'].replace('.stl', ''), requested_model)
                     if file_score > thing_to_use_score:
                         thing_to_use_score = file_score
@@ -161,7 +169,7 @@ def get_name_score(search_name, target_name):
             score -= 2
         else:
             score += 1
-
+    print(f'got score {score} for name {search_name}')
     return score
 
 
@@ -169,11 +177,12 @@ def pick_stl_files(requested_models, manifest_things):
     all_files = []
     for index in range(0, len(requested_models)):
         requested_model = requested_models[index]
+        print(f'picking stl file for {requested_model}')
         thing = manifest_things[index]
         file_to_use = None
         if thing:
             file_score = 0
-            for file in filter_stl_files(thing):
+            for file in filter_stl_files(thing['files']):
                 this_file_score = get_name_score(file['name'], requested_model)
                 if this_file_score > file_score:
                     file_to_use = file
@@ -231,7 +240,7 @@ def write_manifest(requested_models: list, things: list, files: list):
                 row['thing_name'] = thing['name']
                 row['api'] = thing['url']
                 row['url'] = thing['public_url']
-                row['all_stl_files'] = list(map(lambda file: file['name'], filter_stl_files(thing)))
+                row['all_stl_files'] = list(map(lambda file: file['name'], filter_stl_files(thing['files'])))
             file = files[index]
             if file:
                 row['stl_file'] = file['name']

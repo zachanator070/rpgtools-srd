@@ -1,16 +1,14 @@
 import json
-import re
-import subprocess
 
 import requests
 
 from make_manifest import load_manifest
 
-API_URL = 'http://localhost:3000/api'
+API_URL = 'http://localhost:3000/graphql'
 
 
 cookies = None
-worldId = "5f9f85c2f555c5005d1a58a8"
+worldId = "6250f18b8f489b1a4cf78360"
 
 
 def api_query(query, variables=None, file=None):
@@ -24,11 +22,13 @@ def api_query(query, variables=None, file=None):
             ('map', (None, json.dumps({"nfile": ['variables.' + file[0]]}), None)),
             ('nfile', file[1])
         ]
-        response = requests.post(API_URL, files=files_data, cookies=cookies)
+        response = requests.post(API_URL, files=files_data, cookies=cookies, headers={'apollo-require-preflight': 'false'})
     else:
         response = requests.post(API_URL, json=payload, cookies=cookies)
     if response.cookies:
         cookies = response.cookies
+    if not response.status_code == 200:
+        raise ValueError(str(response.content))
     response_json = response.json()
     if 'errors' in response_json:
         errors = response_json['errors']
@@ -59,7 +59,7 @@ def paginated_api_query(query, variables=None):
 def login():
     query = """
         mutation login{
-            login(username: "zach", password: "zach"){
+            login(username: "admin", password: "admin"){
                 _id
             }
         }
@@ -151,8 +151,8 @@ def update_wikis(ids, model_ids):
 def main():
     login()
     manifest = load_manifest()
-    model_ids = upload_models(manifest)
     all_wikis = get_all_wikis()
+    model_ids = upload_models(manifest)
     ids = get_wiki_ids(manifest, all_wikis)
     update_wikis(ids, model_ids)
 
